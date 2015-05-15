@@ -8,18 +8,120 @@ output:
 
 ## Loading and preprocessing the data
 
+```{r, echo=FALSE,message=FALSE}
+library(dplyr)
+library(ggplot2)
+```
 
+```{r}
+mydata.df=read.csv("./activity.csv",header=T,
+	colClasses=c("integer","Date","integer"))
+SumEachDay.df=aggregate(mydata.df$steps,by=list(Day=mydata.df$date),FUN=sum)
+```
 
+##
 ## What is mean total number of steps taken per day?
-
-
+##
+Below is the table for mean & median for number of step taken each day:
+```{r, echo=FALSE}
+hist(SumEachDay.df$x)
+```
 
 ## What is the average daily activity pattern?
 
+Below is the table for mean & median for number of step taken each day:
+```{r showtable, result="asis"}
+MeanMedian.df=mydata.df %>% 
+	group_by (date) %>% 
+	summarise(mean=mean(steps,na.rm=T), median=median(steps,na.rm=T))
+MeanMedian.df
+```
+
+Below is the plot with Ave number of steps vs 5 mins interval:
+```{r}
+MeanFiveMinutes=mydata.df %>% group_by (interval) %>% summarise(average=mean(steps,na.rm=T))
+ggplot(data=MeanFiveMinutes) + geom_line(aes(x = interval, y = average)) + xlab('Mins') + ylab('Average')
+```
+
+```{r}
+myinterval=subset(MeanFiveMinutes, average==max(MeanFiveMinutes$average),
+        select=interval)
+```
+`r myinterval` is the max number of steps.
+
+##
+## Inputing missing values
+##
+```{r, echo=FALSE}
+TotalRowNA=nrow(subset(mydata.df, is.na(steps)))
+```
+Total number of missing values in the dataset is `r TotalRowNA`.
+
+```{r, message=FALSE,warning=FALSE}
+library(reshape)
+mydataCast.df=cast(mydata.df,date~interval,value="steps")
+
+for (x in 1:nrow(mydataCast.df)){
+        myvalue = as.numeric(mydataCast.df[x,-1])
+        myvalue[is.na(myvalue)] = MeanFiveMinutes$average
+        mydataCast.df[x,-1] <- myvalue
+}
+```
+
+The NA value in dataset are replaced with 5mins interval  mean value.
+
+```{r, echo=FALSE}
+mydataClean.df= mydataCast.df %>%
+                melt(id=date) %>%
+                arrange(date,interval)
+
+colnames(mydataClean.df)[2]="steps"
+
+```
 
 
-## Imputing missing values
+```{r}
+SumEachDayClean.df=aggregate(mydataClean.df$steps, by=list(Day=mydataClean.df$date),FUN=sum)
+ReportClean=mydataClean.df %>% group_by (date) %>% summarise(mean=mean(steps,na.rm=T), median=median(steps,na.rm=T))
+```
+
+##Below is the table for mean & median for each day with NA "cleaned" based on above strategy:
+```{r, echo=FALSE}
+hist(SumEachDayClean.df$x)
+```
+
+Below is the table for mean & median for number of step taken each day with NA filled up based on above strategy :
+```{r}
+ReportClean.df=mydataClean.df %>% group_by (date) %>% summarise(mean=mean(steps,na.rm=T), median=median(steps,na.rm=T))
+ReportClean.df
+```
 
 
+```{r, echo=FALSE,message=FALSE}
 
-## Are there differences in activity patterns between weekdays and weekends?
+library(lubridate)
+mydata.df$day = wday(mydata.df$date) 
+
+# --- conflict with dplyr and cause uncertainty to summarize function -------
+#library(plyr)
+#mydata.df$day = wday(mydata.df$date) %>% factor %>% revalue ( #c("1"="weekday","2"="weekday","3"="weekday","4"="weekday","5"="weekday", "6"="weekend", #"0"="weekend"))
+
+Weekdayclass=1:5
+Weekendclass=6:7
+
+mydata.df$day[ mydata.df$day %in% Weekdayclass ] <- "weekday"
+mydata.df$day[ mydata.df$day %in% Weekendclass ] <- "weekend"
+
+MeanFiveMinutesByDay=mydata.df %>% group_by (interval,day) %>% summarise(average=mean(steps,na.rm=T))
+myweekday=subset(MeanFiveMinutesByDay, day=="weekday", select=c(interval, average))
+myweekend=subset(MeanFiveMinutesByDay, day=="weekend", select=c(interval, average))
+ggplot() + geom_line(data=myweekday,aes(x = interval, y = average),color="red") + 
+	geom_line(data=myweekend,aes(x = interval, y = average),color="black") + 
+	xlab('Mins') + ylab('Average')  + theme(legend.position="bottom") + 
+  theme(legend.title=element_blank()) + guides(fill=TRUE)
+
+```
+
+# Are there differences in activity patterns between weekdays and weekends?
+# 
+## From the graph, there are high mean steps between 0500 - 1000 on weekday. After 1000 onwards,  there are more steps taken over weekend.
